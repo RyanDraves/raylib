@@ -412,7 +412,6 @@ void SetAudioBufferVolume(AudioBuffer *buffer, float volume);
 void SetAudioBufferPitch(AudioBuffer *buffer, float pitch);
 void TrackAudioBuffer(AudioBuffer *buffer);
 void UntrackAudioBuffer(AudioBuffer *buffer);
-int GetAudioStreamBufferSizeDefault();
 
 //----------------------------------------------------------------------------------
 // Module Functions Definition - Audio Device initialization and Closing
@@ -786,7 +785,7 @@ Sound LoadSoundFromWave(Wave wave)
         //
         // First option has been selected, format conversion is done on the loading stage.
         // The downside is that it uses more memory if the original sound is u8 or s16.
-        ma_format formatIn  = ((wave.sampleSize == 8)? ma_format_u8 : ((wave.sampleSize == 16)? ma_format_s16 : ma_format_f32));
+        ma_format formatIn = ((wave.sampleSize == 8)? ma_format_u8 : ((wave.sampleSize == 16)? ma_format_s16 : ma_format_f32));
         ma_uint32 frameCountIn = wave.sampleCount/wave.channels;
 
         ma_uint32 frameCount = (ma_uint32)ma_convert_frames(NULL, 0, AUDIO_DEVICE_FORMAT, AUDIO_DEVICE_CHANNELS, AUDIO.System.device.sampleRate, NULL, frameCountIn, formatIn, wave.channels, wave.sampleRate);
@@ -1785,7 +1784,9 @@ AudioStream LoadAudioStream(unsigned int sampleRate, unsigned int sampleSize, un
 
     // The size of a streaming buffer must be at least double the size of a period
     unsigned int periodSize = AUDIO.System.device.playback.internalPeriodSizeInFrames;
-    unsigned int subBufferSize = GetAudioStreamBufferSizeDefault();
+    
+    // If the buffer is not set, compute one that would give us a buffer good enough for a decent frame rate
+    unsigned int subBufferSize = (AUDIO.Buffer.defaultSize == 0)? AUDIO.Buffer.defaultSize : AUDIO.System.device.sampleRate/30;
 
     if (subBufferSize < periodSize) subBufferSize = periodSize;
 
@@ -1918,15 +1919,6 @@ void SetAudioStreamPitch(AudioStream stream, float pitch)
 void SetAudioStreamBufferSizeDefault(int size)
 {
     AUDIO.Buffer.defaultSize = size;
-}
-
-int GetAudioStreamBufferSizeDefault()
-{
-    // if the buffer is not set, compute one that would give us a buffer good enough for a decent frame rate
-    if (AUDIO.Buffer.defaultSize == 0)
-        AUDIO.Buffer.defaultSize = AUDIO.System.device.sampleRate/30;
-
-    return AUDIO.Buffer.defaultSize;
 }
 
 //----------------------------------------------------------------------------------
@@ -2116,7 +2108,7 @@ static void OnSendAudioDataToDevice(ma_device *pDevice, void *pFramesOut, const 
                     if (framesJustRead > 0)
                     {
                         float *framesOut = (float *)pFramesOut + (framesRead*AUDIO.System.device.playback.channels);
-                        float *framesIn  = tempBuffer;
+                        float *framesIn = tempBuffer;
 
                         MixAudioFrames(framesOut, framesIn, framesJustRead, audioBuffer->volume);
 
@@ -2167,7 +2159,7 @@ static void MixAudioFrames(float *framesOut, const float *framesIn, ma_uint32 fr
         for (ma_uint32 iChannel = 0; iChannel < AUDIO.System.device.playback.channels; ++iChannel)
         {
             float *frameOut = framesOut + (iFrame*AUDIO.System.device.playback.channels);
-            const float *frameIn  = framesIn  + (iFrame*AUDIO.System.device.playback.channels);
+            const float *frameIn = framesIn + (iFrame*AUDIO.System.device.playback.channels);
 
             frameOut[iChannel] += (frameIn[iChannel]*localVolume);
         }
